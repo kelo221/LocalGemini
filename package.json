@@ -1,0 +1,36 @@
+{
+  "name": "localgemini",
+  "version": "0.1.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "tauri": "tauri"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.17",
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-opener": "^2.5.2",
+    "@types/node": "^24.10.0",
+    "daisyui": "^5.4.7",
+    "highlight.js": "^11.11.1",
+    "svelte-exmarkdown": "^5.0.2",
+    "tailwindcss": "^4.1.17"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.48.4",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "svelte": "^5.43.5",
+    "svelte-check": "^4.3.3",
+    "typescript": "~5.6.3",
+    "vite": "^6.4.1",
+    "@tauri-apps/cli": "^2.9.4"
+  }
+}
