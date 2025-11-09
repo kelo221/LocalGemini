@@ -3,8 +3,7 @@
   import { gfmPlugin } from "svelte-exmarkdown/gfm";
   import hljs from "highlight.js";
   import "highlight.js/styles/atom-one-dark.css";
-  import { onMount } from "svelte";
-  import { tick } from "svelte";
+  import { tick, onDestroy } from "svelte";
   
   interface Props {
     md: string;
@@ -13,6 +12,7 @@
   let { md = "" }: Props = $props();
   const plugins = [gfmPlugin()];
   let container: HTMLDivElement | null = null;
+  let highlightTimer: number | null = null;
 
   async function highlight() {
     await tick();
@@ -27,15 +27,24 @@
     });
   }
 
-  onMount(() => {
-    highlight();
-  });
-  
   // Re-highlight when markdown content changes
   $effect(() => {
     // Access md to make this reactive
     md;
-    highlight();
+    // Debounce highlighting to avoid running during streaming updates
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+    }
+    highlightTimer = setTimeout(() => {
+      highlight();
+    }, 200);
+  });
+
+  onDestroy(() => {
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
   });
 </script>
 
