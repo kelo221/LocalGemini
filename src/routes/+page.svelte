@@ -345,9 +345,9 @@
     </div>
 
     <!-- Messages Area -->
-    <div class="flex-1 overflow-y-auto p-4" bind:this={scroller}>
+    <div class="flex-1 overflow-y-auto px-2 py-4 md:px-4" bind:this={scroller}>
       {#if apiKeyError}
-        <div class="alert alert-warning max-w-2xl mx-auto mb-4">
+        <div class="alert alert-warning max-w-4xl mx-auto mb-4">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             class="h-6 w-6 shrink-0 stroke-current"
@@ -371,7 +371,7 @@
       {/if}
 
       {#if !apiKeyConfigured}
-        <div class="alert alert-info max-w-2xl mx-auto">
+        <div class="alert alert-info max-w-4xl mx-auto">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -397,13 +397,25 @@
           </div>
         </div>
       {:else}
-        {#each messages as m (m.id)}
-          <div class="chat {m.role === 'user' ? 'chat-end' : 'chat-start'}">
-            <div class="chat-bubble {m.role === 'user' ? 'chat-bubble-primary' : ''} max-w-4xl">
-              <MarkdownMessage md={m.content} />
-            </div>
-          </div>
-        {/each}
+        <div class="max-w-7xl mx-auto space-y-6">
+          {#each messages as m (m.id)}
+            {#if m.role === 'user'}
+              <!-- User message: small bubble on the right -->
+              <div class="flex justify-end">
+                <div class="bg-primary text-primary-content rounded-2xl px-4 py-2 max-w-[80%] md:max-w-[60%]">
+                  <MarkdownMessage md={m.content} />
+                </div>
+              </div>
+            {:else}
+              <!-- Assistant message: full width, no bubble -->
+              <div class="w-full">
+                <div class="prose prose-invert max-w-none">
+                  <MarkdownMessage md={m.content} />
+                </div>
+              </div>
+            {/if}
+          {/each}
+        </div>
       {/if}
     </div>
 

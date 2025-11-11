@@ -88,32 +88,30 @@
               No chat history yet
             </div>
           {:else}
-            <div class="menu p-2">
+            <div class="p-2 space-y-1">
               {#each sessions as session (session.id)}
-                <li>
-                  <div class="flex items-start justify-between gap-2 {session.id === currentSessionId ? 'active' : ''}">
-                    <button
-                      onclick={() => onSelectSession(session.id)}
-                      class="flex-1 text-left overflow-hidden"
-                    >
-                      <div class="text-sm font-medium truncate">
-                        {session.title}
-                      </div>
-                      <div class="text-xs opacity-60">
-                        {formatDate(session.updatedAt)}
-                      </div>
-                    </button>
-                    <button
-                      onclick={(e) => handleDelete(e, session.id)}
-                      class="btn btn-ghost btn-xs btn-circle"
-                      aria-label="Delete chat"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
+                <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-300 {session.id === currentSessionId ? 'bg-base-300' : ''}">
+                  <button
+                    onclick={() => onSelectSession(session.id)}
+                    class="flex-1 text-left min-w-0 overflow-hidden"
+                  >
+                    <div class="text-sm font-medium truncate">
+                      {session.title}
+                    </div>
+                    <div class="text-xs opacity-60">
+                      {formatDate(session.updatedAt)}
+                    </div>
+                  </button>
+                  <button
+                    onclick={(e) => handleDelete(e, session.id)}
+                    class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+                    aria-label="Delete chat"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
               {/each}
             </div>
           {/if}

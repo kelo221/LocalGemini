@@ -49,13 +49,31 @@ export async function streamGenerate({
   apiKey,
 }: StreamOptions & { apiKey: string }): Promise<void> {
   const contents = messagesToContents(messages);
-  // Pass AbortSignal in a type-safe way if SDK supports it; fallback to any
+  // Use the official streaming API and extract text from each chunk
   const generateStream: any = (getClient(apiKey).models as any).generateContentStream;
-  const response = await generateStream({ model, contents, signal });
-  for await (const chunk of response) {
-    const text = (chunk as any)?.text as string | undefined;
-    if (text) onText(text);
+  const result = await generateStream({
+    model,
+    contents,
+    // Per official examples, pass abort via config.abortSignal
+    config: { abortSignal: signal },
+  });
+  const stream: AsyncIterable<any> = (result as any).stream ?? (result as any);
+
+  for await (const chunk of stream) {
     if (signal?.aborted) break;
+    try {
+      // Official examples expose chunk.text (string) and chunk.data (binary)
+      const text =
+        (typeof (chunk as any).text === "string" ? (chunk as any).text : undefined) ??
+        // Fallback: attempt to read the first candidate text
+        (chunk as any)?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text).join("") ??
+        undefined;
+      if (text) {
+        onText(text);
+      }
+    } catch {
+      // Ignore malformed chunks and continue streaming
+    }
   }
 }
 
