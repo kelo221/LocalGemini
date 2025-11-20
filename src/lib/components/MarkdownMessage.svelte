@@ -4,11 +4,16 @@
   import hljs from "highlight.js";
   import "highlight.js/styles/atom-one-dark.css";
   import { tick, onDestroy } from "svelte";
-  
+
+  // Explicitly register languages if they might be missing from default bundle
+  // (Though 'haskell' is usually in the common set, we'll be safe)
+  import haskell from 'highlight.js/lib/languages/haskell';
+  hljs.registerLanguage('haskell', haskell);
+
   interface Props {
     md: string;
   }
-  
+
   let { md = "" }: Props = $props();
   const plugins = [gfmPlugin()];
   let container: HTMLDivElement | null = null;
@@ -17,12 +22,40 @@
   async function highlight() {
     await tick();
     if (!container) return;
-    const blocks = container.querySelectorAll("pre code:not(.hljs)");
-    blocks.forEach((el) => {
-      try {
-        hljs.highlightElement(el as HTMLElement);
-      } catch (e) {
-        // Silently handle errors during partial rendering
+    const blocks = container.querySelectorAll("pre code");
+    
+    console.log(`[Markdown] Highlighting ${blocks.length} blocks. Total MD length: ${md.length}`);
+
+    blocks.forEach((el, index) => {
+      if (el instanceof HTMLElement) {
+        const rawTextContent = el.textContent || "";
+        const rawInnerHTML = el.innerHTML;
+        
+        // console.log(`[Markdown] Block ${index} before:`, { 
+        //   length: rawTextContent.length,
+        //   preview: rawTextContent.substring(0, 20),
+        //   highlighted: el.dataset.highlighted 
+        // });
+
+        // Fix: Ensure code block contains only text to avoid "unescaped HTML" warning
+        // and potential rendering issues with < characters.
+        // Only reset if we think it's needed to avoid blowing away valid content repeatedly if not needed
+        if (el.innerHTML !== rawTextContent) {
+             // console.log(`[Markdown] Block ${index} resetting content.`);
+             el.textContent = rawTextContent;
+        }
+
+        // Check if the element is already highlighted
+        if (el.dataset.highlighted) {
+             delete el.dataset.highlighted;
+        }
+
+        try {
+          hljs.highlightElement(el as HTMLElement);
+          // console.log(`[Markdown] Block ${index} highlight success.`);
+        } catch (e) {
+          console.error(`[Markdown] Block ${index} highlight error:`, e);
+        }
       }
     });
   }
@@ -159,4 +192,3 @@
     border-color: oklch(var(--b3));
   }
 </style>
-

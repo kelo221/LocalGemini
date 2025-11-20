@@ -82,7 +82,7 @@ export class ChatController {
         },
       });
     } catch (err) {
-      console.error(err);
+      console.error("Generation failed:", err);
     } finally {
       this.generating = false;
       this.abortController = null;

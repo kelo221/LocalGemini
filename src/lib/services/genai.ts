@@ -71,7 +71,8 @@ export async function streamGenerate({
       if (text) {
         onText(text);
       }
-    } catch {
+    } catch (error) {
+      console.warn("Error processing chunk:", error);
       // Ignore malformed chunks and continue streaming
     }
   }
