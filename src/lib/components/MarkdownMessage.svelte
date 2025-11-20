@@ -1,6 +1,7 @@
 <script lang="ts">
   import Markdown from "svelte-exmarkdown";
   import { gfmPlugin } from "svelte-exmarkdown/gfm";
+  import rehypeRaw from "rehype-raw";
   import hljs from "highlight.js";
   import "highlight.js/styles/atom-one-dark.css";
   import { tick, onDestroy } from "svelte";
@@ -15,16 +16,51 @@
   }
 
   let { md = "" }: Props = $props();
-  const plugins = [gfmPlugin()];
+  const plugins = [gfmPlugin(), { rehypePlugin: rehypeRaw }];
+  const multilineCodeCellRegex = /\|([^|\n]+)\|\s*```(\w+)?\s*\r?\n([\s\S]*?)```[ \t]*\|/g;
+  
+  function escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function normalizeCodeBlocksInTables(input: string): string {
+    return input.replace(multilineCodeCellRegex, (_, firstCell, lang = "", rawCode) => {
+      const trimmedCode = rawCode.replace(/\r\n/g, "\n").replace(/\s+$/, "");
+      const escapedCode = escapeHtml(trimmedCode).replace(/\n/g, "&#10;");
+      const languageClass = lang ? ` class="language-${lang}"` : "";
+      const normalizedCell = firstCell.trim();
+      return `| ${normalizedCell} | <pre><code${languageClass}>${escapedCode}</code></pre> |`;
+    });
+  }
+
+  const normalizedMd = $derived(normalizeCodeBlocksInTables(md));
   let container: HTMLDivElement | null = null;
-  let highlightTimer: number | null = null;
+  let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+  let copyStates = $state<Map<number, boolean>>(new Map());
+
+  async function copyCode(index: number, code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      copyStates.set(index, true);
+      copyStates = new Map(copyStates);
+      setTimeout(() => {
+        copyStates.delete(index);
+        copyStates = new Map(copyStates);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
+  }
 
   async function highlight() {
     await tick();
     if (!container) return;
     const blocks = container.querySelectorAll("pre code");
     
-    console.log(`[Markdown] Highlighting ${blocks.length} blocks. Total MD length: ${md.length}`);
+    console.log(`[Markdown] Highlighting ${blocks.length} blocks. Total MD length: ${normalizedMd.length}`);
 
     blocks.forEach((el, index) => {
       if (el instanceof HTMLElement) {
@@ -33,14 +69,16 @@
         
         // console.log(`[Markdown] Block ${index} before:`, { 
         //   length: rawTextContent.length,
-        //   preview: rawTextContent.substring(0, 20),
+        //   preview: rawTextContent.substring(0, 50),
+        //   fullContent: rawTextContent,
         //   highlighted: el.dataset.highlighted 
         // });
 
         // Fix: Ensure code block contains only text to avoid "unescaped HTML" warning
         // and potential rendering issues with < characters.
         // Only reset if we think it's needed to avoid blowing away valid content repeatedly if not needed
-        if (el.innerHTML !== rawTextContent) {
+        // Always preserve the raw text content, even if it's minimal (e.g., just "_")
+        if (el.innerHTML !== rawTextContent && rawTextContent.trim().length > 0) {
              // console.log(`[Markdown] Block ${index} resetting content.`);
              el.textContent = rawTextContent;
         }
@@ -58,12 +96,79 @@
         }
       }
     });
+
+    // Add copy buttons after highlighting is complete
+    // Do this in a separate pass to avoid interfering with highlighting
+    await tick();
+    addCopyButtons();
+  }
+
+  function addCopyButtons() {
+    if (!container) return;
+    const blocks = container.querySelectorAll("pre code");
+    
+    blocks.forEach((el, index) => {
+      if (el instanceof HTMLElement) {
+        const preElement = el.parentElement;
+        if (preElement && preElement.tagName === "PRE") {
+          // Remove any existing copy button first to avoid duplicates
+          const existingBtn = preElement.querySelector(".copy-code-btn");
+          if (existingBtn) {
+            existingBtn.remove();
+          }
+
+          const rawTextContent = el.textContent || "";
+          
+          try {
+            preElement.style.position = "relative";
+            
+            const copyBtn = document.createElement("button");
+            copyBtn.className = "copy-code-btn btn btn-xs btn-ghost";
+            copyBtn.setAttribute("data-index", index.toString());
+            copyBtn.setAttribute("type", "button");
+            copyBtn.setAttribute("aria-label", "Copy code");
+            copyBtn.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            `;
+            
+            copyBtn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const idx = parseInt(copyBtn.getAttribute("data-index") || "0");
+              copyCode(idx, rawTextContent);
+              
+              // Update button to show "Copied!"
+              copyBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-xs ml-1">Copied!</span>
+              `;
+              
+              setTimeout(() => {
+                copyBtn.innerHTML = `
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                `;
+              }, 2000);
+            };
+            
+            preElement.appendChild(copyBtn);
+          } catch (e) {
+            console.error(`[Markdown] Failed to add copy button to block ${index}:`, e);
+          }
+        }
+      }
+    });
   }
 
   // Re-highlight when markdown content changes
   $effect(() => {
-    // Access md to make this reactive
-    md;
+    // Access normalizedMd to make this reactive
+    normalizedMd;
     // Debounce highlighting to avoid running during streaming updates
     if (highlightTimer) {
       clearTimeout(highlightTimer);
@@ -82,7 +187,7 @@
 </script>
 
 <div bind:this={container} class="markdown-content">
-  <Markdown {md} {plugins} />
+  <Markdown md={normalizedMd} {plugins} />
   {#if false}{/if}
 </div>
 
@@ -94,7 +199,30 @@
     overflow-x: auto;
     background-color: #282c34 !important;
     padding: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .markdown-content :global(pre .copy-code-btn) {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    min-height: 1.75rem;
+    height: 1.75rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .markdown-content :global(pre:hover .copy-code-btn) {
+    opacity: 1;
+  }
+
+  .markdown-content :global(pre .copy-code-btn:hover) {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
   }
 
   .markdown-content :global(pre code) {
@@ -180,10 +308,16 @@
   .markdown-content :global(table td) {
     padding: 0.5rem;
     border: 1px solid oklch(var(--b3));
+    vertical-align: top;
   }
 
   .markdown-content :global(thead) {
     background-color: oklch(var(--b2));
+  }
+
+  .markdown-content :global(table pre) {
+    margin-top: 0;
+    margin-bottom: 0;
   }
 
   .markdown-content :global(hr) {

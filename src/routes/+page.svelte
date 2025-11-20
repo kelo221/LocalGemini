@@ -113,7 +113,15 @@
 
   async function scrollToBottom() {
     await tick();
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    if (!scroller) return;
+    
+    // Check if user is near the bottom (within 100px)
+    const isNearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
+    
+    // Only auto-scroll if user is already near bottom
+    if (isNearBottom) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
   }
 
   function toggleSidebar() {
