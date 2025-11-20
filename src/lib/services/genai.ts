@@ -47,6 +47,7 @@ export async function streamGenerate({
   signal,
   onText,
   apiKey,
+  systemInstruction,
 }: StreamOptions & { apiKey: string }): Promise<void> {
   const contents = messagesToContents(messages);
   // Use the official streaming API and extract text from each chunk
@@ -55,7 +56,10 @@ export async function streamGenerate({
     model,
     contents,
     // Per official examples, pass abort via config.abortSignal
-    config: { abortSignal: signal },
+    config: { 
+      abortSignal: signal,
+      systemInstruction: systemInstruction,
+    },
   });
   const stream: AsyncIterable<any> = (result as any).stream ?? (result as any);
 

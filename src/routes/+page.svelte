@@ -16,6 +16,7 @@
   } from "$lib/services/chatHistory";
   import { getApiKey, hasApiKey } from "$lib/services/apiKeyStorage";
   import { getAllModels, DEFAULT_MODELS, isDefaultModel } from "$lib/services/modelStorage";
+  import { initTheme, loadSettings, saveSettings, type AppSettings } from "$lib/services/settingsStorage";
 
   const controller = new ChatController("models/gemini-flash-latest");
 
@@ -37,6 +38,14 @@
   let showSetupScreen = $state(false);
   let showSettingsModal = $state(false);
   let apiKeyError = $state<string | undefined>(undefined);
+
+  // Settings state
+  let systemPrompt = $state<string>("");
+  let currentTheme = $state<string>("dark");
+
+  // Editing state
+  let editingMessageId = $state<string | null>(null);
+  let editContent = $state("");
 
   let scroller: HTMLDivElement | null = null;
 
@@ -98,7 +107,15 @@
 
     input = "";
     apiKeyError = undefined;
-    controller.send(text, apiKey, update);
+    
+    controller.send(
+      text, 
+      { 
+        apiKey, 
+        systemInstruction: systemPrompt || undefined 
+      }, 
+      update
+    );
   }
 
   function stop() {
@@ -192,13 +209,83 @@
     apiKeyError = undefined;
     // Reload models to get any newly added custom models
     loadModels();
+    
+    // Reload settings (system prompt)
+    const settings = loadSettings();
+    systemPrompt = settings.systemPrompt;
+    currentTheme = settings.theme;
   }
 
   function openSettings() {
     showSettingsModal = true;
   }
 
+  function toggleTheme() {
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    saveSettings({ theme: newTheme });
+    currentTheme = newTheme;
+  }
+
+  // Editing functions
+  function startEdit(message: ChatMessage) {
+    if (generating) return;
+    editingMessageId = message.id;
+    editContent = message.content;
+  }
+
+  function cancelEdit() {
+    editingMessageId = null;
+    editContent = "";
+  }
+
+  function saveEdit() {
+    if (!editingMessageId || !editContent.trim() || generating) return;
+    
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      apiKeyError = "No API key configured.";
+      return;
+    }
+
+    controller.editMessage(
+      editingMessageId,
+      editContent,
+      { 
+        apiKey, 
+        systemInstruction: systemPrompt || undefined 
+      },
+      update
+    );
+    
+    editingMessageId = null;
+    editContent = "";
+  }
+
+  function handleRegenerate() {
+    if (generating) return;
+    
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      apiKeyError = "No API key configured.";
+      return;
+    }
+
+    controller.regenerate(
+      { 
+        apiKey, 
+        systemInstruction: systemPrompt || undefined 
+      },
+      update
+    );
+  }
+
   onMount(() => {
+    // Initialize theme
+    initTheme();
+    const settings = loadSettings();
+    currentTheme = settings.theme;
+    systemPrompt = settings.systemPrompt;
+
     // Check for API key first
     checkApiKey();
     
@@ -246,9 +333,11 @@
   <!-- Main Content -->
   <main class="flex flex-col flex-1 min-w-0">
     <!-- Navbar -->
-    <div class="navbar bg-base-200 border-b border-base-300">
+    <div class="navbar bg-base-200 border-b border-base-300 min-h-[3.5rem]">
       <div class="navbar-start">
-        <h1 class="text-xl font-bold ml-12">Gemini Local Chat</h1>
+        <div class="flex items-center ml-12">
+           <h1 class="text-xl font-bold">Gemini Local Chat</h1>
+        </div>
       </div>
       <div class="navbar-center flex items-center gap-2">
         <div class="dropdown dropdown-bottom">
@@ -339,6 +428,22 @@
         >
           Clear
         </button>
+        
+        <!-- Theme Toggle -->
+        <button class="btn btn-sm btn-ghost btn-circle" onclick={toggleTheme} title="Toggle theme">
+          {#if currentTheme === 'dark'}
+            <!-- Sun icon for dark mode -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" />
+            </svg>
+          {:else}
+            <!-- Moon icon for light mode -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+            </svg>
+          {/if}
+        </button>
+
         <button
           type="button"
           class="btn btn-sm btn-ghost btn-circle"
@@ -405,21 +510,62 @@
           </div>
         </div>
       {:else}
-        <div class="max-w-7xl mx-auto space-y-6">
-          {#each messages as m (m.id)}
+        <div class="max-w-7xl mx-auto space-y-6 pb-12">
+          {#each messages as m, index (m.id)}
             {#if m.role === 'user'}
-              <!-- User message: small bubble on the right -->
-              <div class="flex justify-end">
-                <div class="bg-primary text-primary-content rounded-2xl px-4 py-2 max-w-[80%] md:max-w-[60%]">
-                  <MarkdownMessage md={m.content} />
+              <!-- User message -->
+              <div class="flex justify-end group">
+                <div class="bg-primary text-primary-content rounded-2xl px-4 py-2 max-w-[80%] md:max-w-[60%] relative">
+                  {#if editingMessageId === m.id}
+                    <!-- Edit Mode -->
+                    <div class="flex flex-col gap-2 min-w-[200px]">
+                      <textarea
+                        class="textarea textarea-bordered text-base-content w-full p-2 min-h-[100px]"
+                        bind:value={editContent}
+                        autofocus
+                      ></textarea>
+                      <div class="flex justify-end gap-2">
+                        <button class="btn btn-xs btn-ghost text-primary-content" onclick={cancelEdit}>Cancel</button>
+                        <button class="btn btn-xs btn-secondary" onclick={saveEdit}>Save</button>
+                      </div>
+                    </div>
+                  {:else}
+                    <!-- Display Mode -->
+                    <MarkdownMessage md={m.content} />
+                    {#if !generating}
+                      <button
+                        class="btn btn-xs btn-circle btn-ghost absolute -left-8 top-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onclick={() => startEdit(m)}
+                        title="Edit message"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                    {/if}
+                  {/if}
                 </div>
               </div>
             {:else}
-              <!-- Assistant message: full width, no bubble -->
-              <div class="w-full">
+              <!-- Assistant message -->
+              <div class="w-full group relative">
                 <div class="prose prose-invert max-w-none">
                   <MarkdownMessage md={m.content} />
                 </div>
+                
+                {#if !generating && index === messages.length - 1}
+                  <div class="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      class="btn btn-xs btn-ghost gap-1"
+                      onclick={handleRegenerate}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                      </svg>
+                      Regenerate
+                    </button>
+                  </div>
+                {/if}
               </div>
             {/if}
           {/each}

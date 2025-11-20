@@ -39,20 +39,11 @@ export class ChatController {
     this.messages = [];
   }
 
-  async send(
-    userText: string,
+  private async generateResponse(
     apiKey: string,
+    systemInstruction: string | undefined,
     onChange: (messages: ChatMessage[], generating: boolean) => void
   ): Promise<void> {
-    if (!userText.trim()) return;
-    if (this.generating) return;
-
-    const userMsg: ChatMessage = {
-      id: uid(),
-      role: "user",
-      content: userText,
-      createdAt: Date.now(),
-    };
     const assistantMsg: ChatMessage = {
       id: uid(),
       role: "assistant",
@@ -60,7 +51,7 @@ export class ChatController {
       createdAt: Date.now(),
     };
 
-    this.messages = [...this.messages, userMsg, assistantMsg];
+    this.messages = [...this.messages, assistantMsg];
     this.generating = true;
     onChange(this.messages, this.generating);
 
@@ -71,6 +62,7 @@ export class ChatController {
         model: this.model,
         // Provide all messages up to but excluding the empty assistant placeholder
         messages: this.messages.slice(0, -1),
+        systemInstruction,
         signal: this.abortController.signal,
         apiKey,
         onText: (delta) => {
@@ -87,6 +79,69 @@ export class ChatController {
       this.generating = false;
       this.abortController = null;
       onChange(this.messages, this.generating);
+    }
+  }
+
+  async send(
+    userText: string,
+    options: { apiKey: string; systemInstruction?: string },
+    onChange: (messages: ChatMessage[], generating: boolean) => void
+  ): Promise<void> {
+    if (!userText.trim()) return;
+    if (this.generating) return;
+
+    const userMsg: ChatMessage = {
+      id: uid(),
+      role: "user",
+      content: userText,
+      createdAt: Date.now(),
+    };
+
+    this.messages = [...this.messages, userMsg];
+    
+    await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
+  }
+
+  async editMessage(
+    messageId: string,
+    newContent: string,
+    options: { apiKey: string; systemInstruction?: string },
+    onChange: (messages: ChatMessage[], generating: boolean) => void
+  ): Promise<void> {
+    if (this.generating) return;
+
+    const index = this.messages.findIndex((m) => m.id === messageId);
+    if (index === -1) return;
+
+    // Only allow editing user messages for now (or treat assistant edit as just a correction without regen? Plan says "edit their own messages")
+    if (this.messages[index].role !== "user") return;
+
+    // Update content
+    this.messages[index].content = newContent;
+    
+    // Truncate all messages after this one
+    this.messages = this.messages.slice(0, index + 1);
+    
+    // Regenerate response
+    await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
+  }
+
+  async regenerate(
+    options: { apiKey: string; systemInstruction?: string },
+    onChange: (messages: ChatMessage[], generating: boolean) => void
+  ): Promise<void> {
+    if (this.generating) return;
+    if (this.messages.length === 0) return;
+
+    // If last message is assistant, remove it
+    const lastMsg = this.messages[this.messages.length - 1];
+    if (lastMsg.role === "assistant") {
+      this.messages = this.messages.slice(0, -1);
+    }
+
+    // Only regenerate if there is at least one message (user message) left
+    if (this.messages.length > 0) {
+      await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
     }
   }
 
@@ -136,5 +191,3 @@ export class ChatController {
     this.messages = [];
   }
 }
-
-

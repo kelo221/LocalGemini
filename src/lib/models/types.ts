@@ -33,6 +33,7 @@ export type ModelName = 'models/gemini-flash-latest' | (string & {});
 export interface StreamOptions {
   model: ModelName;
   messages: ChatMessage[];
+  systemInstruction?: string;
   signal?: AbortSignal;
   onText: (delta: string) => void;
 }

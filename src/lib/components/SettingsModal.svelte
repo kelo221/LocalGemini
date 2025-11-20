@@ -7,6 +7,7 @@
     removeCustomModel,
     DEFAULT_MODELS,
   } from "$lib/services/modelStorage";
+  import { saveSettings, loadSettings } from "$lib/services/settingsStorage";
 
   let { isOpen = $bindable(false), onSave } = $props<{
     isOpen: boolean;
@@ -14,6 +15,7 @@
   }>();
 
   let apiKeyInput = $state("");
+  let systemPromptInput = $state("");
   let validating = $state(false);
   let errorMessage = $state<string | undefined>(undefined);
   let successMessage = $state<string | undefined>(undefined);
@@ -27,11 +29,15 @@
   let loadingModels = $state(false);
   let modelsLoadError = $state<string | undefined>(undefined);
 
-  // Load current API key and models when modal opens
+  // Load current settings when modal opens
   $effect(() => {
     if (isOpen) {
       const currentKey = getApiKey();
       apiKeyInput = currentKey || "";
+      
+      const settings = loadSettings();
+      systemPromptInput = settings.systemPrompt || "";
+
       errorMessage = undefined;
       successMessage = undefined;
       customModels = getCustomModels();
@@ -58,7 +64,13 @@
 
     if (result.valid) {
       saveApiKey(key);
-      successMessage = "API key saved successfully!";
+      
+      // Save other settings
+      saveSettings({
+        systemPrompt: systemPromptInput.trim()
+      });
+
+      successMessage = "Settings saved successfully!";
       validating = false;
       setTimeout(() => {
         isOpen = false;
@@ -204,6 +216,22 @@
               Google AI Studio
             </a>
           </p>
+        </div>
+
+        <!-- System Prompt Section -->
+        <div class="divider"></div>
+        <div>
+          <label for="system-prompt-input" class="label">
+            <span class="label-text font-semibold">System Prompt</span>
+            <span class="label-text-alt text-opacity-60">Optional</span>
+          </label>
+          <textarea
+            id="system-prompt-input"
+            class="textarea textarea-bordered w-full h-24"
+            placeholder="Enter instructions for the AI (e.g., 'You are a helpful coding assistant', 'Be concise'). This applies to all chats."
+            bind:value={systemPromptInput}
+            disabled={validating}
+          ></textarea>
         </div>
 
         <!-- Custom Models Section -->
@@ -436,4 +464,3 @@
     </div>
   </dialog>
 {/if}
-
