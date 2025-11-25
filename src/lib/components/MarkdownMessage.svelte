@@ -37,6 +37,18 @@
 
   let container: HTMLDivElement | null = null;
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastKnownLanguage: string | null = null;
+
+  // Extract language from element's class (e.g., "language-haskell" -> "haskell")
+  function getLanguageFromClass(el: HTMLElement): string | null {
+    const classes = el.className.split(/\s+/);
+    for (const cls of classes) {
+      if (cls.startsWith("language-")) {
+        return cls.replace("language-", "");
+      }
+    }
+    return null;
+  }
 
   async function copyCode(index: number, code: string) {
     try {
@@ -60,6 +72,24 @@
         }
 
         try {
+          const specifiedLang = getLanguageFromClass(el);
+          
+          // Check if the specified language is valid
+          if (specifiedLang && !hljs.getLanguage(specifiedLang)) {
+            // Unknown language - try to use the last known good language
+            if (lastKnownLanguage) {
+              // Remove the invalid language class and add the fallback
+              el.className = el.className
+                .split(/\s+/)
+                .filter(c => !c.startsWith("language-"))
+                .concat(`language-${lastKnownLanguage}`)
+                .join(" ");
+            }
+          } else if (specifiedLang && hljs.getLanguage(specifiedLang)) {
+            // Valid language - remember it for future fallbacks
+            lastKnownLanguage = specifiedLang;
+          }
+          
           hljs.highlightElement(el);
         } catch (e) {
           console.error("Highlight error:", e);
