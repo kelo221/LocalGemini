@@ -1,10 +1,28 @@
 export type Role = 'user' | 'assistant';
 
+export interface FileAttachment {
+  uri: string;
+  mimeType: string;
+  name: string;
+  previewUrl?: string; // For local preview before upload
+}
+
+export interface GroundingSource {
+  uri: string;
+  title: string;
+}
+
+export interface GroundingMetadata {
+  sources: GroundingSource[];
+}
+
 export interface ChatMessage {
   id: string;
   role: Role;
   content: string;
   createdAt: number;
+  attachments?: FileAttachment[];
+  groundingMetadata?: GroundingMetadata;
 }
 
 export interface ChatState {
@@ -34,8 +52,10 @@ export interface StreamOptions {
   model: ModelName;
   messages: ChatMessage[];
   systemInstruction?: string;
+  useSearchGrounding?: boolean;
   signal?: AbortSignal;
   onText: (delta: string) => void;
+  onGroundingMetadata?: (metadata: GroundingMetadata) => void;
 }
 
 

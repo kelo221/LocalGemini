@@ -6,19 +6,16 @@
   import "highlight.js/styles/atom-one-dark.css";
   import { tick, onDestroy } from "svelte";
 
-  // Explicitly register languages if they might be missing from default bundle
-  // (Though 'haskell' is usually in the common set, we'll be safe)
-  import haskell from 'highlight.js/lib/languages/haskell';
-  hljs.registerLanguage('haskell', haskell);
-
   interface Props {
     md: string;
   }
 
   let { md = "" }: Props = $props();
   const plugins = [gfmPlugin(), { rehypePlugin: rehypeRaw }];
+
+  // Handle code blocks inside markdown table cells (standard MD parsers don't support this)
   const multilineCodeCellRegex = /\|([^|\n]+)\|\s*```(\w+)?\s*\r?\n([\s\S]*?)```[ \t]*\|/g;
-  
+
   function escapeHtml(value: string): string {
     return value
       .replace(/&/g, "&amp;")
@@ -37,19 +34,14 @@
   }
 
   const normalizedMd = $derived(normalizeCodeBlocksInTables(md));
+
   let container: HTMLDivElement | null = null;
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-  let copyStates = $state<Map<number, boolean>>(new Map());
 
   async function copyCode(index: number, code: string) {
     try {
       await navigator.clipboard.writeText(code);
-      copyStates.set(index, true);
-      copyStates = new Map(copyStates);
-      setTimeout(() => {
-        copyStates.delete(index);
-        copyStates = new Map(copyStates);
-      }, 2000);
+      // Visual feedback handled by button update below
     } catch (err) {
       console.error("Failed to copy code:", err);
     }
@@ -59,46 +51,23 @@
     await tick();
     if (!container) return;
     const blocks = container.querySelectorAll("pre code");
-    
-    console.log(`[Markdown] Highlighting ${blocks.length} blocks. Total MD length: ${normalizedMd.length}`);
 
-    blocks.forEach((el, index) => {
+    blocks.forEach((el) => {
       if (el instanceof HTMLElement) {
-        const rawTextContent = el.textContent || "";
-        const rawInnerHTML = el.innerHTML;
-        
-        // console.log(`[Markdown] Block ${index} before:`, { 
-        //   length: rawTextContent.length,
-        //   preview: rawTextContent.substring(0, 50),
-        //   fullContent: rawTextContent,
-        //   highlighted: el.dataset.highlighted 
-        // });
-
-        // Fix: Ensure code block contains only text to avoid "unescaped HTML" warning
-        // and potential rendering issues with < characters.
-        // Only reset if we think it's needed to avoid blowing away valid content repeatedly if not needed
-        // Always preserve the raw text content, even if it's minimal (e.g., just "_")
-        if (el.innerHTML !== rawTextContent && rawTextContent.trim().length > 0) {
-             // console.log(`[Markdown] Block ${index} resetting content.`);
-             el.textContent = rawTextContent;
-        }
-
-        // Check if the element is already highlighted
+        // Reset highlight state if already highlighted
         if (el.dataset.highlighted) {
-             delete el.dataset.highlighted;
+          delete el.dataset.highlighted;
         }
 
         try {
-          hljs.highlightElement(el as HTMLElement);
-          // console.log(`[Markdown] Block ${index} highlight success.`);
+          hljs.highlightElement(el);
         } catch (e) {
-          console.error(`[Markdown] Block ${index} highlight error:`, e);
+          console.error("Highlight error:", e);
         }
       }
     });
 
-    // Add copy buttons after highlighting is complete
-    // Do this in a separate pass to avoid interfering with highlighting
+    // Add copy buttons after highlighting
     await tick();
     addCopyButtons();
   }
@@ -106,7 +75,7 @@
   function addCopyButtons() {
     if (!container) return;
     const blocks = container.querySelectorAll("pre code");
-    
+
     blocks.forEach((el, index) => {
       if (el instanceof HTMLElement) {
         const preElement = el.parentElement;
@@ -118,10 +87,10 @@
           }
 
           const rawTextContent = el.textContent || "";
-          
+
           try {
             preElement.style.position = "relative";
-            
+
             const copyBtn = document.createElement("button");
             copyBtn.className = "copy-code-btn btn btn-xs btn-ghost";
             copyBtn.setAttribute("data-index", index.toString());
@@ -132,13 +101,13 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             `;
-            
+
             copyBtn.onclick = (e) => {
               e.preventDefault();
               e.stopPropagation();
               const idx = parseInt(copyBtn.getAttribute("data-index") || "0");
               copyCode(idx, rawTextContent);
-              
+
               // Update button to show "Copied!"
               copyBtn.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -146,7 +115,7 @@
                 </svg>
                 <span class="text-xs ml-1">Copied!</span>
               `;
-              
+
               setTimeout(() => {
                 copyBtn.innerHTML = `
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,10 +124,10 @@
                 `;
               }, 2000);
             };
-            
+
             preElement.appendChild(copyBtn);
           } catch (e) {
-            console.error(`[Markdown] Failed to add copy button to block ${index}:`, e);
+            console.error(`Failed to add copy button to block ${index}:`, e);
           }
         }
       }

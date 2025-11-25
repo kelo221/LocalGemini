@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSession, ModelName } from "../models/types";
+import type { ChatMessage, ChatSession, ModelName, FileAttachment, GroundingMetadata } from "../models/types";
 import { streamGenerate } from "../services/genai";
 
 function uid(): string {
@@ -42,6 +42,7 @@ export class ChatController {
   private async generateResponse(
     apiKey: string,
     systemInstruction: string | undefined,
+    useSearchGrounding: boolean | undefined,
     onChange: (messages: ChatMessage[], generating: boolean) => void
   ): Promise<void> {
     const assistantMsg: ChatMessage = {
@@ -63,10 +64,25 @@ export class ChatController {
         // Provide all messages up to but excluding the empty assistant placeholder
         messages: this.messages.slice(0, -1),
         systemInstruction,
+        useSearchGrounding,
         signal: this.abortController.signal,
         apiKey,
         onText: (delta) => {
           assistantMsg.content += delta;
+          this.messages = this.messages.map((m) =>
+            m.id === assistantMsg.id ? assistantMsg : m
+          );
+          onChange(this.messages, this.generating);
+        },
+        onGroundingMetadata: (metadata: GroundingMetadata) => {
+          // Merge grounding sources (avoid duplicates)
+          const existingSources = assistantMsg.groundingMetadata?.sources || [];
+          const newSources = metadata.sources.filter(
+            (s) => !existingSources.some((e) => e.uri === s.uri)
+          );
+          assistantMsg.groundingMetadata = {
+            sources: [...existingSources, ...newSources],
+          };
           this.messages = this.messages.map((m) =>
             m.id === assistantMsg.id ? assistantMsg : m
           );
@@ -84,10 +100,15 @@ export class ChatController {
 
   async send(
     userText: string,
-    options: { apiKey: string; systemInstruction?: string },
+    options: { 
+      apiKey: string; 
+      systemInstruction?: string; 
+      useSearchGrounding?: boolean;
+      attachments?: FileAttachment[];
+    },
     onChange: (messages: ChatMessage[], generating: boolean) => void
   ): Promise<void> {
-    if (!userText.trim()) return;
+    if (!userText.trim() && (!options.attachments || options.attachments.length === 0)) return;
     if (this.generating) return;
 
     const userMsg: ChatMessage = {
@@ -95,17 +116,23 @@ export class ChatController {
       role: "user",
       content: userText,
       createdAt: Date.now(),
+      attachments: options.attachments,
     };
 
     this.messages = [...this.messages, userMsg];
     
-    await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
+    await this.generateResponse(
+      options.apiKey, 
+      options.systemInstruction, 
+      options.useSearchGrounding,
+      onChange
+    );
   }
 
   async editMessage(
     messageId: string,
     newContent: string,
-    options: { apiKey: string; systemInstruction?: string },
+    options: { apiKey: string; systemInstruction?: string; useSearchGrounding?: boolean },
     onChange: (messages: ChatMessage[], generating: boolean) => void
   ): Promise<void> {
     if (this.generating) return;
@@ -123,11 +150,16 @@ export class ChatController {
     this.messages = this.messages.slice(0, index + 1);
     
     // Regenerate response
-    await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
+    await this.generateResponse(
+      options.apiKey, 
+      options.systemInstruction, 
+      options.useSearchGrounding,
+      onChange
+    );
   }
 
   async regenerate(
-    options: { apiKey: string; systemInstruction?: string },
+    options: { apiKey: string; systemInstruction?: string; useSearchGrounding?: boolean },
     onChange: (messages: ChatMessage[], generating: boolean) => void
   ): Promise<void> {
     if (this.generating) return;
@@ -141,7 +173,12 @@ export class ChatController {
 
     // Only regenerate if there is at least one message (user message) left
     if (this.messages.length > 0) {
-      await this.generateResponse(options.apiKey, options.systemInstruction, onChange);
+      await this.generateResponse(
+        options.apiKey, 
+        options.systemInstruction, 
+        options.useSearchGrounding,
+        onChange
+      );
     }
   }
 

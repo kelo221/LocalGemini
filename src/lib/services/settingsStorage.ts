@@ -1,6 +1,7 @@
 export interface AppSettings {
   theme: string;
   systemPrompt: string;
+  useSearchGrounding: boolean;
 }
 
 const SETTINGS_KEY = "gemini_app_settings";
@@ -8,6 +9,7 @@ const SETTINGS_KEY = "gemini_app_settings";
 const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark", // Default to dark
   systemPrompt: "",
+  useSearchGrounding: false,
 };
 
 export function saveSettings(settings: Partial<AppSettings>): void {

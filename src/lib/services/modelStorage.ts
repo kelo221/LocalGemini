@@ -2,7 +2,7 @@ const STORAGE_KEY = "gemini_custom_models";
 
 export const DEFAULT_MODELS = [
   "models/gemini-flash-latest",
-  "models/gemini-pro-latest",
+  "models/gemini-3-pro-preview",
 ];
 
 export function getCustomModels(): string[] {

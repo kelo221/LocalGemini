@@ -43,67 +43,115 @@
       onDeleteSession(sessionId);
     }
   }
+
+  function handleSelectAndClose(sessionId: string) {
+    onSelectSession(sessionId);
+    // Close sidebar on mobile after selection
+    if (window.innerWidth < 768) {
+      onToggle();
+    }
+  }
+
+  function handleNewChatAndClose() {
+    onNewChat();
+    // Close sidebar on mobile after creating new chat
+    if (window.innerWidth < 768) {
+      onToggle();
+    }
+  }
 </script>
 
 <div class="relative flex h-full">
-  <!-- Toggle Button -->
-  <button
-    onclick={onToggle}
-    class="absolute top-4 left-2 z-10 btn btn-sm btn-circle btn-ghost"
-    aria-label="Toggle sidebar"
-  >
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      {#if isOpen}
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-      {:else}
+  <!-- Toggle Button (only visible when sidebar is closed) -->
+  {#if !isOpen}
+    <button
+      onclick={onToggle}
+      class="absolute top-4 left-2 z-50 btn btn-sm btn-circle btn-ghost bg-base-100 shadow-sm md:bg-transparent md:shadow-none"
+      aria-label="Open sidebar"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      {/if}
-    </svg>
-  </button>
+      </svg>
+    </button>
+  {/if}
+
+  <!-- Mobile backdrop -->
+  {#if isOpen}
+    <button
+      class="fixed inset-0 bg-black/50 z-30 md:hidden animate-fade-in"
+      onclick={onToggle}
+      aria-label="Close sidebar"
+    ></button>
+  {/if}
 
   <!-- Sidebar -->
   <div
-    class="bg-base-200 border-r border-base-300 transition-all duration-300 ease-in-out flex flex-col"
-    style="width: {isOpen ? '280px' : '0px'}; overflow: hidden;"
+    class="bg-base-200 border-r border-base-300 flex flex-col transition-all duration-300 ease-in-out overflow-hidden
+           fixed md:relative h-full z-40"
+    style="width: {isOpen ? '280px' : '0'};"
   >
-    <div class="flex flex-col h-full w-[280px]">
-      <!-- Header with New Chat Button -->
-      <div class="p-4 border-b border-base-300">
-        <button
-          onclick={onNewChat}
-          class="btn btn-primary btn-sm w-full"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-          </svg>
-          New Chat
-        </button>
+    <div class="flex flex-col h-full min-w-[280px]">
+      <!-- Header with collapse button and New Chat -->
+      <div class="p-3 border-b border-base-300">
+        <div class="flex items-center gap-2">
+          <!-- Collapse button -->
+          <button
+            onclick={onToggle}
+            class="btn btn-sm btn-ghost btn-square"
+            aria-label="Close sidebar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+          <!-- New Chat button -->
+          <button
+            onclick={handleNewChatAndClose}
+            class="btn btn-primary btn-sm flex-1 gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            New Chat
+          </button>
+        </div>
       </div>
 
       <!-- Chat Sessions List -->
       <div class="flex-1 overflow-y-auto">
         {#if sessions.length === 0}
           <div class="p-4 text-center text-sm opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
             No chat history yet
           </div>
         {:else}
           <div class="p-2 space-y-1">
-            {#each sessions as session (session.id)}
-              <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-300 {session.id === currentSessionId ? 'bg-base-300' : ''}">
+            {#each sessions as session, index (session.id)}
+              <div 
+                class="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors
+                       hover:bg-base-300 active:bg-base-300
+                       {session.id === currentSessionId ? 'bg-base-300 border-l-2 border-primary' : ''}"
+                style="animation-delay: {index * 30}ms"
+              >
                 <button
-                  onclick={() => onSelectSession(session.id)}
-                  class="flex-1 text-left min-w-0 overflow-hidden"
+                  onclick={() => handleSelectAndClose(session.id)}
+                  class="flex-1 text-left min-w-0 overflow-hidden py-1"
                 >
                   <div class="text-sm font-medium truncate">
                     {session.title}
                   </div>
-                  <div class="text-xs opacity-60">
+                  <div class="text-xs opacity-60 flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                     {formatDate(session.updatedAt)}
                   </div>
                 </button>
                 <button
                   onclick={(e) => handleDelete(e, session.id)}
-                  class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+                  class="btn btn-ghost btn-xs btn-circle flex-shrink-0 opacity-50 hover:opacity-100 hover:btn-error"
                   aria-label="Delete chat"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
